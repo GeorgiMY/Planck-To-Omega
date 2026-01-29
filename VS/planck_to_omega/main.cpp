@@ -8,6 +8,9 @@
 
 #include <stdio.h>
 
+#include <vector>
+#include <cmath>
+
 // [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to maximize ease of testing and compatibility with old VS compilers.
 // To link with VS2010-era libraries, VS2015+ requires linking with legacy_stdio_definitions.lib, which we do using this pragma.
 // Your own project should not be affected, as you are likely to link with a newer binary of GLFW that is adequate for your version of Visual Studio.
@@ -37,6 +40,10 @@ void processInput(GLFWwindow* window);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+
+void generateSphere(float radius, unsigned int stacks, unsigned int sectors, std::vector<float>& vertices);
+
+void generateSphereIndices(unsigned int stacks, unsigned int sectors, std::vector<unsigned int>& indices);
 
 // settings
 const unsigned int SCR_WIDTH = 1280;
@@ -70,6 +77,7 @@ int main(int, char**)
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     // Disable VSync (uncap FPS). 0 = off, 1 = on, 2 = every other v-blank (if supported)
     glfwSwapInterval(0);
 
@@ -79,27 +87,42 @@ int main(int, char**)
         return 1;
     }
 
-    float vertices[] = {
-    -0.5f, -0.5f, 0.0f,
-     0.5f, -0.5f, 0.0f,
-     0.0f,  0.5f, 0.0f
-    };
+    std::vector<float> sphereVertices;
+    std::vector<unsigned int> sphereIndices;
 
-    unsigned int VAO, VBO;
+    generateSphere(1.0f, 32, 32, sphereVertices);
+    generateSphereIndices(32, 32, sphereIndices);
+
+    unsigned int VAO, VBO, EBO;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
+    glGenBuffers(1, &EBO);
 
     glBindVertexArray(VAO);
 
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glBufferData(
+        GL_ARRAY_BUFFER,
+        sphereVertices.size() * sizeof(float),
+        sphereVertices.data(),
+        GL_STATIC_DRAW
+    );
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(
+        GL_ELEMENT_ARRAY_BUFFER,
+        sphereIndices.size() * sizeof(unsigned int),
+        sphereIndices.data(),
+        GL_STATIC_DRAW
+    );
 
     // position attribute
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
+
+    glEnable(GL_DEPTH_TEST);
 
     // Load shader
     Shader triangleShader("vertex.glsl", "frag.frag");
@@ -151,9 +174,9 @@ int main(int, char**)
     // FPS measurement variables
     double previousTime = glfwGetTime();
     int frameCount = 0;
-    double timeBetweenCalls = 0.33; // seconds
+    double timeBetweenCalls = 1; // seconds
 
-    char fpsText[20] = "FPS: ";
+    char fpsText[sizeof(int) * 8 + 5] = "FPS: ";
 
     // Main loop
 #ifdef __EMSCRIPTEN__
@@ -177,12 +200,15 @@ int main(int, char**)
             continue;
         }
 
+        processInput(window);
+
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::SetNextWindowSize(ImVec2(640, 480));
+        ImGui::SetNextWindowSize(ImVec2(320, 240));
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::Begin("Planck To Omega Initial!", &show_window, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
 
         ImVec2 textSize = ImGui::CalcTextSize(fpsText);
@@ -194,12 +220,25 @@ int main(int, char**)
         glfwGetFramebufferSize(window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
         glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Draw triangle
         triangleShader.use();
+        glm::mat4 model = glm::mat4(1.0f);
+        glm::mat4 view = camera.GetViewMatrix();
+        glm::mat4 projection = glm::perspective(
+            glm::radians(camera.Zoom),
+            (float)display_w / (float)display_h,
+            0.1f,
+            100.0f
+        );
+
+        triangleShader.setMat4("model", model);
+        triangleShader.setMat4("view", view);
+        triangleShader.setMat4("projection", projection);
+
         glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glDrawElements(GL_TRIANGLES, sphereIndices.size(), GL_UNSIGNED_INT, 0);
 
         // Rendering
         ImGui::Render();
@@ -285,4 +324,47 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
     camera.ProcessMouseScroll(static_cast<float>(yoffset));
+}
+
+void generateSphere(float radius, unsigned int stacks, unsigned int sectors, std::vector<float>& vertices) {
+    const float PI = 3.14159265359f;
+
+    for (unsigned int i = 0; i <= stacks; ++i) {
+        float stackAngle = PI / 2 - i * PI / stacks; // from +pi/2 to -pi/2
+        float xy = radius * cosf(stackAngle);
+        float z = radius * sinf(stackAngle);
+
+        for (unsigned int j = 0; j <= sectors; ++j) {
+            float sectorAngle = j * 2 * PI / sectors;
+
+            float x = xy * cosf(sectorAngle);
+            float y = xy * sinf(sectorAngle);
+
+            vertices.push_back(x);
+            vertices.push_back(y);
+            vertices.push_back(z);
+        }
+    }
+}
+
+void generateSphereIndices(unsigned int stacks, unsigned int sectors, std::vector<unsigned int>& indices) {
+    unsigned int k1, k2;
+
+    for (unsigned int i = 0; i < stacks; ++i) {
+        k1 = i * (sectors + 1);
+        k2 = k1 + sectors + 1;
+
+        for (unsigned int j = 0; j < sectors; ++j, ++k1, ++k2) {
+            if (i != 0) {
+                indices.push_back(k1);
+                indices.push_back(k2);
+                indices.push_back(k1 + 1);
+            }
+            if (i != (stacks - 1)) {
+                indices.push_back(k1 + 1);
+                indices.push_back(k2);
+                indices.push_back(k2 + 1);
+            }
+        }
+    }
 }
