@@ -11,6 +11,8 @@
 #include <vector>
 #include <cmath>
 
+#include "UIManager.h"
+
 // [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to maximize ease of testing and compatibility with old VS compilers.
 // To link with VS2010-era libraries, VS2015+ requires linking with legacy_stdio_definitions.lib, which we do using this pragma.
 // Your own project should not be affected, as you are likely to link with a newer binary of GLFW that is adequate for your version of Visual Studio.
@@ -57,6 +59,8 @@ bool firstMouse = true;
 float lastX = 800.0f / 2.0;
 float lastY = 600.0 / 2.0;
 
+UIManager ui;
+
 int main(int, char**)
 {
     glfwSetErrorCallback(glfw_error_callback);
@@ -76,7 +80,6 @@ int main(int, char**)
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     // Disable VSync (uncap FPS). 0 = off, 1 = on, 2 = every other v-blank (if supported)
     glfwSwapInterval(0);
 
@@ -85,6 +88,8 @@ int main(int, char**)
         fprintf(stderr, "Failed to initialize GLAD\n");
         return 1;
     }
+
+    ui.Push(UIState::MainMenu);
 
     std::vector<glm::vec3> spherePositions = {
         { 0.0f, 0.0f, 0.0f },
@@ -166,8 +171,6 @@ int main(int, char**)
     int frameCount = 0;
     double timeBetweenCalls = 1; // seconds
 
-    char fpsText[5 + sizeof(int) * 8] = "FPS: ";
-
     // Main loop
 #ifdef __EMSCRIPTEN__
     // For an Emscripten build we are disabling file-system access, so let's not attempt to do a fopen() of the imgui.ini file.
@@ -192,22 +195,14 @@ int main(int, char**)
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::SetNextWindowSize(ImVec2(160, 120));
-        ImGui::SetNextWindowPos(ImVec2(0, 0));
-        ImGui::Begin("Planck To Omega Initial!", &show_window, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
+        ui.Render();
 
-        ImVec2 textSize = ImGui::CalcTextSize(fpsText);
-        ImGui::SetCursorPos(ImVec2(ImGui::GetWindowWidth() / 2 - textSize.x, ImGui::GetWindowHeight() / 2 - textSize.y));
-        ImGui::Text(fpsText);
-
-        ImGui::End();
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
         glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // Draw triangle
         glm::mat4 view = camera.GetViewMatrix();
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)display_w / (float)display_h, 0.1f, 100.0f);
 
@@ -240,7 +235,8 @@ int main(int, char**)
         {
             // Display the frame count.
             //std::cout << "FPS: " << frameCount << std::endl;
-            snprintf(fpsText, sizeof(fpsText), "FPS: %d", frameCount);
+
+            ui.SetFPS(frameCount);
 
             frameCount = 0;
             previousTime = currentTime;
@@ -275,14 +271,14 @@ void processInput(GLFWwindow* window)
     lastFrame = currentFrame;
     const float cameraSpeed = 2.5f * deltaTime;
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        camera.ProcessKeyboard(FORWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        camera.ProcessKeyboard(BACKWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        camera.ProcessKeyboard(LEFT, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        camera.ProcessKeyboard(RIGHT, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) camera.ProcessKeyboard(FORWARD, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) camera.ProcessKeyboard(BACKWARD, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) camera.ProcessKeyboard(LEFT, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) camera.ProcessKeyboard(RIGHT, deltaTime);
+
+    if (ImGui::IsKeyPressed(ImGuiKey_Space)) ui.Push(UIState::Pause);
+
+    if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) ui.Pop();
 }
 
 void mouse_callback(GLFWwindow* window, double xpos, double ypos)

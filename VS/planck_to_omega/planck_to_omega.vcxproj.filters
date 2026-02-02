@@ -40,6 +40,12 @@
     <ClCompile Include="..\libs\glad\src\glad.c">
       <Filter>sources</Filter>
     </ClCompile>
+    <ClCompile Include="UIManager.h">
+      <Filter>Header Files</Filter>
+    </ClCompile>
+    <ClCompile Include="UIManager.cpp">
+      <Filter>sources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\imconfig.h">
