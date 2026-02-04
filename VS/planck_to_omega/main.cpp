@@ -76,6 +76,8 @@ int main(int, char**)
     GLFWwindow* window = glfwCreateWindow((int)(1280 * main_scale), (int)(800 * main_scale), "Planck To Omega", nullptr, nullptr);
     if (window == nullptr) return 1;
 
+    ui.Init(window);
+
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
@@ -153,14 +155,16 @@ int main(int, char**)
     ImGui_ImplOpenGL3_Init(glsl_version);
 
     // Load Fonts
-    //style.FontSizeBase = 20.0f;
-    //io.Fonts->AddFontDefault();
-    //io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\segoeui.ttf");
-    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf");
-    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf");
-    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf");
-    //ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf");
-    //IM_ASSERT(font != nullptr);
+    float fontSize = 32.0f * main_scale;
+    ImFont* microgramma = io.Fonts->AddFontFromFileTTF("fonts/microgrammanormal.ttf", fontSize);
+
+    // Check if it loaded correctly
+    if (microgramma == nullptr) {
+        fprintf(stderr, "Failed to load microgramma.ttf font!\n");
+    }
+
+    // Fallback default font
+    io.Fonts->AddFontDefault();
 
     // States
     bool show_window = true;
@@ -203,21 +207,23 @@ int main(int, char**)
         glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glm::mat4 view = camera.GetViewMatrix();
-        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)display_w / (float)display_h, 0.1f, 100.0f);
+        if (ui.HasState(UIState::HUD)) {
+            glm::mat4 view = camera.GetViewMatrix();
+            glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)display_w / (float)display_h, 0.1f, 100.0f);
 
-        triangleShader.use();
-        triangleShader.setMat4("view", view);
-        triangleShader.setMat4("projection", projection);
+            triangleShader.use();
+            triangleShader.setMat4("view", view);
+            triangleShader.setMat4("projection", projection);
 
-        glBindVertexArray(VAO);
+            glBindVertexArray(VAO);
 
-        for (const auto& pos : spherePositions)
-        {
-            glm::mat4 model = glm::translate(glm::mat4(1.0f), pos);
-            triangleShader.setMat4("model", model);
+            for (const glm::vec3& pos : spherePositions)
+            {
+                glm::mat4 model = glm::translate(glm::mat4(1.0f), pos);
+                triangleShader.setMat4("model", model);
 
-            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(sphereIndices.size()), GL_UNSIGNED_INT, 0);
+                glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(sphereIndices.size()), GL_UNSIGNED_INT, 0);
+            }
         }
 
         // Rendering
@@ -264,8 +270,6 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 
 void processInput(GLFWwindow* window)
 {
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(window, true);
-
     float currentFrame = glfwGetTime();
     deltaTime = currentFrame - lastFrame;
     lastFrame = currentFrame;
@@ -276,9 +280,11 @@ void processInput(GLFWwindow* window)
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) camera.ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) camera.ProcessKeyboard(RIGHT, deltaTime);
 
-    if (ImGui::IsKeyPressed(ImGuiKey_Space)) ui.Push(UIState::Pause);
-
-    if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) ui.Pop();
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape))
+    {
+        if (ui.HasState(UIState::Options)) ui.Pop();
+        else ui.Push(UIState::Options);
+    }
 }
 
 void mouse_callback(GLFWwindow* window, double xpos, double ypos)

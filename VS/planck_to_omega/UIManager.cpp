@@ -1,11 +1,22 @@
 #include "UIManager.h"
 #include <imgui.h>
+#include <GLFW/glfw3.h>
 
 char fpsText[5 + sizeof(int) * 8] = "FPS: ";
 
+void UIManager::Init(GLFWwindow* window)
+{
+    m_Window = window;
+}
+
+bool UIManager::HasState(UIState state)
+{
+    return std::find(stack.begin(), stack.end(), state) != stack.end();
+}
+
 void UIManager::Push(UIState state)
 {
-    if (!HasStateExceptLast(state)) stack.push_back(state);
+    if (!HasState(state)) stack.push_back(state);
 }
 
 void UIManager::Pop()
@@ -17,16 +28,6 @@ void UIManager::Clear()
 {
     stack.clear();
 }
-
-bool UIManager::HasStateExceptLast(UIState state) const
-{
-    return std::find(stack.begin(), stack.end(), state) != stack.end();
-}
-
-//bool UIManager::HasState(UIState state) const
-//{
-//    //return std::find(stack.begin(), stack.end(), state);
-//}
 
 bool UIManager::Empty() const
 {
@@ -53,9 +54,6 @@ void UIManager::Render()
         case UIState::MainMenu:
             RenderMainMenu();
             break;
-        case UIState::Pause:
-            RenderPause();
-            break;
         case UIState::HUD:
             RenderHUD();
             break;
@@ -65,7 +63,9 @@ void UIManager::Render()
 
 void UIManager::RenderMainMenu()
 {
-    ImGui::Begin("Main Menu", nullptr, ImGuiWindowFlags_NoResize);
+    ImGui::SetNextWindowPos(ImVec2(10, 10));
+    ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x - 20, ImGui::GetIO().DisplaySize.y - 20));
+    ImGui::Begin("Main Menu", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar);
 
     if (ImGui::Button("Play"))
     {
@@ -80,7 +80,9 @@ void UIManager::RenderMainMenu()
 
     if (ImGui::Button("Quit"))
     {
-        //glfwSetWindowShouldClose(window, true);
+        if (m_Window) {
+            glfwSetWindowShouldClose(m_Window, true);
+        }
     }
 
     ImGui::End();
@@ -95,18 +97,6 @@ void UIManager::RenderOptions()
 
     ImGui::SliderFloat("Volume", &volume, 0.0f, 1.0f);
     ImGui::Checkbox("Fullscreen", &fullscreen);
-
-    if (ImGui::Button("Back")) Pop();
-
-    ImGui::End();
-}
-
-void UIManager::RenderPause()
-{
-    ImGui::Begin("Paused");
-
-    if (ImGui::Button("Resume"))
-        Pop();
 
     if (ImGui::Button("Main Menu"))
     {
@@ -127,16 +117,6 @@ void UIManager::RenderHUD()
     ImVec2 textSize = ImGui::CalcTextSize(fpsText);
     ImGui::SetCursorPos(ImVec2(ImGui::GetWindowWidth() / 2 - textSize.x, ImGui::GetWindowHeight() / 2 - textSize.y));
     ImGui::Text(fpsText);
-
-    ImGui::End();
-
-    // Random test window
-    ImGui::SetNextWindowSize(ImVec2(640, 480));
-    ImGui::SetNextWindowPos(ImVec2(500, 500));
-    ImGui::Begin("Planck To Omega Initial!", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
-
-    ImGui::Text("Gameplay HUD");
-    ImGui::Text("Press ESC to pause");
 
     ImGui::End();
 }

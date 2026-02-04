@@ -2,11 +2,12 @@
 #include <vector>
 #include <algorithm>
 
+struct GLFWwindow;
+
 enum class UIState
 {
     MainMenu,
     Options,
-    Pause,
     HUD
 };
 
@@ -16,21 +17,22 @@ class UIManager
         void Push(UIState state);
         void Pop();
         void Clear();
-        bool HasStateExceptLast(UIState state) const;
-        //bool HasState(UIState state) const;
+        bool HasState(UIState state);
 
         void Render();
 
         bool Empty() const;
 
         void SetFPS(int fps);
-        
+
+        void Init(GLFWwindow* window);
 
     private:
         std::vector<UIState> stack;
 
+        GLFWwindow* m_Window = nullptr;
+
         void RenderMainMenu();
         void RenderOptions();
-        void RenderPause();
         void RenderHUD();
 };
