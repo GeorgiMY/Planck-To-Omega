@@ -4,9 +4,25 @@
 
 char fpsText[5 + sizeof(int) * 8] = "FPS: ";
 
-void UIManager::Init(GLFWwindow* window)
+void UIManager::Init(GLFWwindow* window, Camera* cam)
 {
     m_Window = window;
+    camera = cam;
+    ToggleFullscreen();
+}
+
+void UIManager::ToggleFullscreen()
+{
+    if (isFullscreen)
+    {
+        GLFWmonitor* mon = glfwGetPrimaryMonitor();
+        const GLFWvidmode* mode = glfwGetVideoMode(mon);
+        glfwSetWindowMonitor(m_Window, mon, 0, 0, mode->width, mode->height, mode->refreshRate);
+    }
+    else
+    {
+        glfwSetWindowMonitor(m_Window, nullptr, 100, 100, 1280, 720, 0);
+    }
 }
 
 bool UIManager::HasState(UIState state)
@@ -92,11 +108,14 @@ void UIManager::RenderOptions()
 {
     ImGui::Begin("Options");
 
-    static float volume = 0.5f;
-    static bool fullscreen = false;
-
     ImGui::SliderFloat("Volume", &volume, 0.0f, 1.0f);
-    ImGui::Checkbox("Fullscreen", &fullscreen);
+
+    if(ImGui::Checkbox("Fullscreen", &isFullscreen))
+    {
+        ToggleFullscreen();
+    }
+
+    ImGui::Checkbox("Show FPS", &showFPS);
 
     if (ImGui::Button("Main Menu"))
     {
@@ -110,13 +129,17 @@ void UIManager::RenderOptions()
 void UIManager::RenderHUD()
 {
     // FPS WINDOW
-    ImGui::SetNextWindowSize(ImVec2(160, 120));
-    ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::Begin("FPS", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
+    if (showFPS) {
+        ImVec2 textSize = ImGui::CalcTextSize(fpsText);
+        ImGui::SetNextWindowSize(ImVec2(0, 0));
+        ImGui::SetNextWindowPos(ImVec2(5, 5));
+        ImGui::Begin("FPS", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground);
 
-    ImVec2 textSize = ImGui::CalcTextSize(fpsText);
-    ImGui::SetCursorPos(ImVec2(ImGui::GetWindowWidth() / 2 - textSize.x, ImGui::GetWindowHeight() / 2 - textSize.y));
-    ImGui::Text(fpsText);
+        ImGui::SetCursorPos(ImVec2(0, 0));
 
-    ImGui::End();
+        ImGui::SetWindowFontScale(0.5f);
+        ImGui::Text(fpsText);
+
+        ImGui::End();
+    }
 }

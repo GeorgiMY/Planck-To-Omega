@@ -54,10 +54,12 @@ const unsigned int SCR_HEIGHT = 720;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+Camera camera(glm::vec3(0.0f, 0.0f, 1100.0f));
 bool firstMouse = true;
 float lastX = 800.0f / 2.0;
 float lastY = 600.0 / 2.0;
+
+float farPlane = 2500.0f;
 
 UIManager ui;
 
@@ -73,10 +75,14 @@ int main(int, char**)
 
     // Create window with graphics context
     float main_scale = ImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor());
-    GLFWwindow* window = glfwCreateWindow((int)(1280 * main_scale), (int)(800 * main_scale), "Planck To Omega", nullptr, nullptr);
-    if (window == nullptr) return 1;
 
-    ui.Init(window);
+    // Window
+    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+    const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+    GLFWwindow* window = glfwCreateWindow(1280, 720, "Planck To Omega", nullptr, nullptr);
+
+    if (!window) return 1;
+    ui.Init(window, &camera);
 
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -94,18 +100,15 @@ int main(int, char**)
     ui.Push(UIState::MainMenu);
 
     std::vector<glm::vec3> spherePositions = {
-        { 0.0f, 0.0f, 0.0f },
-        { 12.5f, 0.0f, 0.0f },
-        { -12.5f, 0.0f, 0.0f },
-        { 0.0f, 12.5f, 0.0f },
-        { 0.0f, -12.5f, 0.0f }
+        { 0.0f, 0.0f, 0.0f }
     };
 
     std::vector<float> sphereVertices;
     std::vector<unsigned int> sphereIndices;
 
-    generateSphere(5.0f, 64, 64, sphereVertices);
-    generateSphereIndices(64, 64, sphereIndices);
+    int levelOfDetail = 256;
+    generateSphere(500.0f, levelOfDetail, levelOfDetail, sphereVertices);
+    generateSphereIndices(levelOfDetail, levelOfDetail, sphereIndices);
 
     unsigned int VAO, VBO, EBO;
     glGenVertexArrays(1, &VAO);
@@ -121,8 +124,12 @@ int main(int, char**)
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sphereIndices.size() * sizeof(unsigned int), sphereIndices.data(), GL_STATIC_DRAW);
 
     // position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
+
+    // normal attribute
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
 
     glBindVertexArray(0);
 
@@ -209,7 +216,7 @@ int main(int, char**)
 
         if (ui.HasState(UIState::HUD)) {
             glm::mat4 view = camera.GetViewMatrix();
-            glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)display_w / (float)display_h, 0.1f, 100.0f);
+            glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)display_w / (float)display_h, 0.1f, farPlane);
 
             triangleShader.use();
             triangleShader.setMat4("view", view);
@@ -232,20 +239,22 @@ int main(int, char**)
         glfwSwapBuffers(window);
 
         // Measure FPS
-        double currentTime = glfwGetTime();
-        double timeInterval = currentTime - previousTime;
+        if (ui.showFPS) {
+            double currentTime = glfwGetTime();
+            double timeInterval = currentTime - previousTime;
 
-        frameCount++;
+            frameCount++;
 
-        if (timeInterval >= timeBetweenCalls)
-        {
-            // Display the frame count.
-            //std::cout << "FPS: " << frameCount << std::endl;
+            if (timeInterval >= timeBetweenCalls)
+            {
+                // Display the frame count.
+                //std::cout << "FPS: " << frameCount << std::endl;
 
-            ui.SetFPS(frameCount);
+                ui.SetFPS(frameCount);
 
-            frameCount = 0;
-            previousTime = currentTime;
+                frameCount = 0;
+                previousTime = currentTime;
+            }
         }
     }
 #ifdef __EMSCRIPTEN__
@@ -327,9 +336,18 @@ void generateSphere(float radius, unsigned int stacks, unsigned int sectors, std
             float x = xy * cosf(sectorAngle);
             float y = xy * sinf(sectorAngle);
 
-            vertices.push_back(x);
-            vertices.push_back(y);
-            vertices.push_back(z);
+            glm::vec3 pos(x, y, z);
+            glm::vec3 normal = glm::normalize(pos);
+
+            // position
+            vertices.push_back(pos.x);
+            vertices.push_back(pos.y);
+            vertices.push_back(pos.z);
+
+            // normal
+            vertices.push_back(normal.x);
+            vertices.push_back(normal.y);
+            vertices.push_back(normal.z);
         }
     }
 }
